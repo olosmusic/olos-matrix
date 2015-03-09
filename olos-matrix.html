@@ -1,0 +1,28 @@
+<link rel="import" href="../polymer/polymer.html">
+
+<!-- <link rel="import" href="../core-icons/core-icons.html">
+<link rel="import" href="../core-icons/av-icons.html"> -->
+
+<!--
+olos-matrix
+##### Example
+
+
+@element olos-matrix
+@blurb 
+@status alpha
+@homepage 
+-->
+<polymer-element name="olos-matrix" attributes="output width height color src showControls play rootfolder">
+  <template>
+    <link rel="stylesheet" href="olos-matrix.css"></link>
+    <div id="container" width="300px">
+    <button id="butt" on-click="{{toggle}}">Go</button>
+
+    </div>
+
+  </template>
+  <script src="olos-matrix.js"type="text/javascript"></script>
+  <script src="../../nexusUI/dist/nexusUI.js"type="text/javascript"></script>
+
+</polymer-element>
