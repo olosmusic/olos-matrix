@@ -24,6 +24,8 @@
     // nexusUI multi matrix
     nexusEl: null,
 
+    publicMethods: ['publicAudio'],
+
     // gain node for control
 
     ready: function() {
@@ -92,8 +94,30 @@
 
     publicAudioChanged: function() {
       this.publicAudio();
+
+      var matExp = this.matrix.matrixExp;
+
+      // resets matrix data
       this.matrix.init();
-      console.log(this.matrix);
+
+      // map the original matrix data to the new matrix
+      for (var i = 0; i < matExp.length; i++) {
+        for (var j = 0; j < matExp[i].length; j++) {
+
+          if (!this.matrix.matrixExp[i]) {
+            this.matrix.matrixExp[i] = new Array(this.matrix.matrixExp[i-1][j].length);
+          }
+
+          if (this.matrix.matrixExp[i]) {
+            // if (j < this.matrix.matrixExp.length) {
+              this.matrix.matrixExp[i][j] = matExp[i][j];
+            // }
+          }
+        }
+      }
+
+      this.matrix.draw();
+
     },
 
     outputChanged: function() {
@@ -108,7 +132,19 @@
           this.outputConnections[i].destination.update();
         }
       }
-    }
+    },
+
+
+    animate: function() {
+      // to do
+    },
+
+    dispose: function() {
+      var self = this;
+
+      // erase nexus element
+      self.nexusEl.erase();
+    },
 
   });
 
