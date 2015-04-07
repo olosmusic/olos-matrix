@@ -24,9 +24,7 @@
     // nexusUI multi matrix
     nexusEl: null,
 
-    publicMethods: ['publicAudio'],
-
-    // gain node for control
+    publicMethods: ['setup', 'onStep'],
 
     ready: function() {
       // nexus element
@@ -34,7 +32,7 @@
       document.body.removeChild(this.nexusEl.canvas);
       this.$.container.appendChild(this.nexusEl.canvas);
 
-      this.publicAudio();
+      this.setup();
 
       this.output = [0];
 
@@ -69,31 +67,31 @@
     },
 
     // these settings can be tweaked in the editor
-    publicAudio: function() {
+    setup: function() {
       this.matrix.row = 4;
       this.matrix.col = 4;
       this.matrix.bpm = 120;
 
-      var scale = [60, 62, 65, 70];
+      this.scale = [60, 62, 65, 70];
+    },
 
-      this.onStep = function(column) {
-        if (typeof(column) !== 'undefined') {
-          var output = new Array(column.length);
-          for (var i = 0; i < column.length; i++) {
-            if (column[i] > 0) {
-              output[i] = scale[i];
-            } else {
-              output[i] = 0;
-            }
+    onStep: function(column) {
+      if (typeof(column) !== 'undefined') {
+        var output = new Array(column.length);
+        for (var i = 0; i < column.length; i++) {
+          if (column[i] > 0) {
+            output[i] = this.scale[i];
+          } else {
+            output[i] = 0;
           }
-          this.output = output;
-          this.fire('output-ready', this.output);
         }
+        this.output = output;
+        this.fire('output-ready', this.output);
       }
     },
 
-    publicAudioChanged: function() {
-      this.publicAudio();
+    setupChanged: function() {
+      this.setup();
 
       var matExp = this.matrix.matrixExp;
 
@@ -121,6 +119,7 @@
     },
 
     outputChanged: function() {
+      console.log(this.output);
       if (this.outputConnections) {
         for (var i = 0; i < this.outputConnections.length; i++) {
           // yes
@@ -143,7 +142,7 @@
       var self = this;
 
       // erase nexus element
-      self.nexusEl.erase();
+      self.nexusEl.destroy();
     },
 
   });
