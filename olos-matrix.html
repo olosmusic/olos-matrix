@@ -5,6 +5,12 @@
 
 <!--
 olos-matrix
+
+bpm defaults to olos global bpm (olos.bpm)
+
+scale defaults to olos global scale (olos.scale)
+
+
 ##### Example
 
 
@@ -13,16 +19,296 @@ olos-matrix
 @status alpha
 @homepage 
 -->
-<polymer-element name="olos-matrix" attributes="output width height color src showControls play rootfolder">
+<polymer-element name="olos-matrix" attributes="clockParam output width height color src showControls play rootfolder">
   <template>
     <link rel="stylesheet" href="olos-matrix.css"></link>
-    <div id="container" width="300px">
-    <button id="butt" on-click="{{toggle}}">Go</button>
 
+    <div id="container" class="olos-container" >
     </div>
 
   </template>
-  <script src="olos-matrix.js"type="text/javascript"></script>
+
+  <script>
+    (function(params){
+
+      Polymer('olos-matrix', {
+
+        started: false,
+        rootfolder: '../olos-matrix/',
+
+        // handle i/o
+        input: null,
+
+        // output data is an array
+        output: [],
+
+        breakpoints: [],
+
+
+        width: 200,
+        height: 200,
+
+        // nexusUI multi matrix
+        nexusEl: null,
+
+        clockParam: null,
+
+        publicMethods: ['setup', 'onStep', 'onInput'],
+
+        _upTick: false,
+
+        ready: function() {
+          var self = this;
+
+          // nexus element
+          this.nexusEl = this.matrix = nx.add("matrixExp");
+
+          document.body.removeChild(this.nexusEl.canvas);
+
+          // new
+          this.$.container.appendChild(this.nexusEl.canvas);
+
+          self.nexusEl.canvas.style.setProperty('width', "100%");
+          self.nexusEl.canvas.style.setProperty('height', "100%");
+
+          this.nexusEl.canvas.width = this.width;
+          this.nexusEl.canvas.height = this.height;
+
+          this.$.container.style.setProperty('width', this.width);
+          this.$.container.style.setProperty('height', this.height);
+
+
+          this.setup();
+
+          setTimeout(function() {
+            self.resize();
+            self.nexusEl.init();
+            self._init();
+          }, 20);
+
+          this.output = [0];
+
+        },
+
+        domReady: function() {
+        },
+
+        _init: function() {
+          var self = this;
+
+          this.nexusEl.on('*', function(val) {
+            if (typeof(val) !== 'undefined' && (val.list instanceof Array) ) {
+              // reverse the column so first array is lowest
+              var reversedColumn = val.list.slice();
+              reversedColumn = reversedColumn.reverse();
+              self.onStep(reversedColumn);
+            }
+            // else {
+            //   throw 'error!!! ' + val + ' val is undefined in matrix';
+            // }
+          });
+
+        },
+
+        start: function() {
+          var self = this;
+          // TO DO: replace this with link to global transport
+          // this.nexusEl.sequence(this.matrix.bpm);
+          this.started = true;
+        },
+
+        stop: function() {
+          this.nexusEl.stop();
+          this.started = false;
+        },
+
+        toggle: function() {
+          if (this.started) {
+            this.stop();
+          } else {
+            this.start();
+          }
+        },
+
+        // these settings can be tweaked in the editor
+        setup: function() {
+          this.matrix.col = 4;
+          this.matrix.row = 4;
+
+          // set update frequency in Tone.Time, where '4n' is a quarter note
+          this.tickInterval = '4n';
+
+          // offset scale
+          this.scaleOffset = 0;
+        },
+
+        tickIntervalChanged: function() {
+          var self = this;
+
+          // schedule ticks to begin on the next beat
+          Tone.Transport.setTimeout(function() {
+
+            if (self._tickCallback) {
+              Tone.Transport.clearInterval(self._tickCallback);
+            }
+
+            self.nexusEl.place = 0;
+
+            self._tickCallback = Tone.Transport.setInterval(function() {
+              // var place = Tone.Transport.transportTimeToSeconds(Tone.Transport.position);
+
+              self.nexusEl.jumpToCol( (self.nexusEl.place) % self.nexusEl.col);
+              self.nexusEl.place++;
+            }, self.tickInterval)
+          }, Tone.Transport.nextBeat( self.tickInterval + "*" + String( self.nexusEl.col) ) );
+        },
+
+        onStep: function(column) {
+          if (typeof(column) !== 'undefined') {
+            var output = new Array(column.length);
+            for (var i = 0; i < column.length; i++) {
+              if (column[i] > 0) {
+
+                // scale step to frequency based on the current scale
+                output[i] = olos.scaleStep(i + this.scaleOffset);
+              } else {
+                output[i] = 0;
+              }
+            }
+            this.output = output;
+            this.fire('output-ready', this.output);
+          }
+        },
+
+        // take a step when there is input
+        onInput: function(event) {
+          // register tick via Tone.js
+          var now = event.playbackTime || audioContext.currentTime;
+          var bufferSize = 1024;
+          var incomingBuffer = event.inputBuffer.getChannelData(0);
+          var upTick = this._upTick;
+          var self = this;
+          for (var i = 0; i < bufferSize; i++){
+            var sample = incomingBuffer[i];
+            if (sample > 0 && !upTick){
+              upTick = true;  
+              //get the callback out of audio thread
+              setTimeout(function(){
+                //to account for the double buffering
+                var tickTime = now + (i + bufferSize * 2)/audioContext.sampleRate;
+                return function(){
+                  if (self.tick){
+                    self.tick(tickTime);
+                  }
+                };
+              }(), 0); // jshint ignore:line
+            } else if (sample < 0 && upTick){
+              upTick = false;
+            }
+          }
+
+          // if upTick has changed...
+          if (upTick && !this._upTick) {
+            self.matrix.place = (self.matrix.place + 1) % self.matrix.col;
+            self.matrix.jumpToCol(self.matrix.place);
+            self.matrix.draw();
+            console.log()
+            // reverse the column so first array is lowest
+            var reversedColumn = self.matrix.val.list.slice();
+            reversedColumn = reversedColumn.reverse();
+
+            self.onStep(reversedColumn);
+          }
+
+          this._upTick = upTick;
+          // console.log(this._upTick);
+          // this.matrix.seqStep();
+        },
+
+        setupChanged: function() {
+          this.setup();
+
+          var matExp = this.matrix.matrixExp;
+
+          // resets matrix data
+          this.matrix.init();
+
+          // map the original matrix data to the new matrix
+          for (var i = 0; i < matExp.length; i++) {
+            for (var j = 0; j < matExp[i].length; j++) {
+
+              if (!this.matrix.matrixExp[i]) {
+                this.matrix.matrixExp[i] = new Array(this.matrix.matrixExp[i-1][j].length);
+              }
+
+              if (this.matrix.matrixExp[i]) {
+                // if (j < this.matrix.matrixExp.length) {
+                  this.matrix.matrixExp[i][j] = matExp[i][j];
+                // }
+              }
+            }
+          }
+
+          this.matrix.draw();
+
+        },
+
+        outputChanged: function() {
+          if (this.outputConnections) {
+            for (var i = 0; i < this.outputConnections.length; i++) {
+              // yes
+              var inputName = this.outputConnections[i].destinationLabel;
+              // console.log(this.outputConnections[i].destination[inputName]);
+              this.outputConnections[i].destination[inputName] = this.output;
+
+              // temporary fix
+              this.outputConnections[i].destination.update();
+            }
+          }
+        },
+
+
+        resize: function() {
+          this.nexusEl.width = this.$.container.offsetWidth;
+          this.nexusEl.height = this.$.container.offsetHeight;
+
+          this.nexusEl.canvas.width = this.$.container.offsetWidth;
+          this.nexusEl.canvas.height = this.$.container.offsetHeight;
+
+          this.nexusEl.canvas.style.setProperty('width', this.$.container.offsetWidth);
+          this.nexusEl.canvas.style.setProperty('height', this.$.container.offsetHeight);
+
+          this.nexusEl.actualWid = this.$.container.offsetWidth;
+          this.nexusEl.actualHgt = this.$.container.offsetHeight;
+
+          this.nexusEl.draw();
+        },
+
+        clockParamChanged: function() {
+          if (this.clockParam instanceof ScriptProcessorNode) {
+            console.log('it is a script processor');
+            this.clockParam.connect(p5.soundOut._silentNode);
+          }
+          this.clockParam.onaudioprocess = this.onInput.bind(this);
+        },
+
+        animate: function() {
+          // to do
+        },
+
+        dispose: function() {
+          var self = this;
+
+          // erase nexus element
+          self.nexusEl.destroy();
+        },
+
+      });
+
+    })();
+</script>
+
+
   <script src="../nexusUI/dist/nexusUI.js"type="text/javascript"></script>
 
 </polymer-element>

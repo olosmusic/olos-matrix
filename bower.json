@@ -4,7 +4,8 @@
   "license": "MIT",
   "main": "olos-matrix.html",
   "dependencies": {
-    "polymer": "Polymer/polymer#~0.5.1"
+    "polymer": "Polymer/polymer#~0.5.5",
+    "nexusUI": "https://github.com/therewasaguy/nexusUI.git#1.0.6"
   },
   "devDependencies": {
     "web-component-tester": "Polymer/web-component-tester#^1.1.4"
