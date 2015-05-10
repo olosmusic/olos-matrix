@@ -19,7 +19,7 @@ scale defaults to olos global scale (olos.scale)
 @status alpha
 @homepage 
 -->
-<polymer-element name="olos-matrix" attributes="clockParam output width height color src showControls play rootfolder">
+<polymer-element name="olos-matrix" attributes="output width height color src showControls play rootfolder">
   <template>
     <link rel="stylesheet" href="olos-matrix.css"></link>
 
@@ -51,9 +51,7 @@ scale defaults to olos global scale (olos.scale)
         // nexusUI multi matrix
         nexusEl: null,
 
-        clockParam: null,
-
-        publicMethods: ['setup', 'onStep', 'onInput'],
+        publicMethods: ['setup', 'onStep'],
 
         _upTick: false,
 
@@ -168,9 +166,11 @@ scale defaults to olos global scale (olos.scale)
             var output = new Array(column.length);
             for (var i = 0; i < column.length; i++) {
               if (column[i] > 0) {
-
+                output[i] = column[i];
                 // scale step to frequency based on the current scale
-                output[i] = olos.scaleStep(i + this.scaleOffset);
+
+                // TO DO: move this to oscillator
+                // output[i] = olos.scaleStep(i + this.scaleOffset);
               } else {
                 output[i] = 0;
               }
@@ -178,51 +178,6 @@ scale defaults to olos global scale (olos.scale)
             this.output = output;
             this.fire('output-ready', this.output);
           }
-        },
-
-        // take a step when there is input
-        onInput: function(event) {
-          // register tick via Tone.js
-          var now = event.playbackTime || audioContext.currentTime;
-          var bufferSize = 1024;
-          var incomingBuffer = event.inputBuffer.getChannelData(0);
-          var upTick = this._upTick;
-          var self = this;
-          for (var i = 0; i < bufferSize; i++){
-            var sample = incomingBuffer[i];
-            if (sample > 0 && !upTick){
-              upTick = true;  
-              //get the callback out of audio thread
-              setTimeout(function(){
-                //to account for the double buffering
-                var tickTime = now + (i + bufferSize * 2)/audioContext.sampleRate;
-                return function(){
-                  if (self.tick){
-                    self.tick(tickTime);
-                  }
-                };
-              }(), 0); // jshint ignore:line
-            } else if (sample < 0 && upTick){
-              upTick = false;
-            }
-          }
-
-          // if upTick has changed...
-          if (upTick && !this._upTick) {
-            self.matrix.place = (self.matrix.place + 1) % self.matrix.col;
-            self.matrix.jumpToCol(self.matrix.place);
-            self.matrix.draw();
-            console.log()
-            // reverse the column so first array is lowest
-            var reversedColumn = self.matrix.val.list.slice();
-            reversedColumn = reversedColumn.reverse();
-
-            self.onStep(reversedColumn);
-          }
-
-          this._upTick = upTick;
-          // console.log(this._upTick);
-          // this.matrix.seqStep();
         },
 
         setupChanged: function() {
@@ -233,6 +188,7 @@ scale defaults to olos global scale (olos.scale)
           // resets matrix data
           this.matrix.init();
 
+          // TO DO: fix this ***
           // map the original matrix data to the new matrix
           for (var i = 0; i < matExp.length; i++) {
             for (var j = 0; j < matExp[i].length; j++) {
@@ -282,18 +238,6 @@ scale defaults to olos global scale (olos.scale)
           this.nexusEl.actualHgt = this.$.container.offsetHeight;
 
           this.nexusEl.draw();
-        },
-
-        clockParamChanged: function() {
-          if (this.clockParam instanceof ScriptProcessorNode) {
-            console.log('it is a script processor');
-            this.clockParam.connect(p5.soundOut._silentNode);
-          }
-          this.clockParam.onaudioprocess = this.onInput.bind(this);
-        },
-
-        animate: function() {
-          // to do
         },
 
         dispose: function() {
