@@ -1,258 +1,369 @@
 <link rel="import" href="../polymer/polymer.html">
 
-<!-- <link rel="import" href="../core-icons/core-icons.html">
-<link rel="import" href="../core-icons/av-icons.html"> -->
-
 <!--
 olos-matrix
 
-bpm defaults to olos global bpm (olos.bpm)
+scale defaults to global scale (olos.scale, an array)
 
-scale defaults to olos global scale (olos.scale)
+bpm is tied to the global olos global bpm (olos.bpm, a number)
 
-
-##### Example
-
+Built with <a href="http://nexusosc.com/api/#nexusui-api-matrix">NexusUI Matrix</a>, New BSD License Ben Taylor,
+Jesse Allison, Yemin Oh, Sebastien Piquemal, Andrew Bernstein
 
 @element olos-matrix
 @blurb 
 @status alpha
 @homepage 
--->
-<polymer-element name="olos-matrix" attributes="output width height color src showControls play rootfolder">
-  <template>
-    <link rel="stylesheet" href="olos-matrix.css"></link>
+@demo /demo
 
-    <div id="container" class="olos-container" >
+-->
+<dom-module id="olos-matrix">
+  <link rel="import" type="css" href="olos-matrix.css">
+  <template>
+
+    <div id="container" class="olos-container">
     </div>
 
   </template>
-
   <script>
-    (function(params){
+    (function (params) {
+      Polymer({
+        is: 'olos-matrix',
+        properties: {
+          _upTick: {
+            type: Boolean,
+            value: false
+          },
+          breakpoints: {
+            type: Array,
+            value: function () {
+              return [];
+            }
+          },
+          color: { notify: true },
+          height: {
+            type: Number,
+            value: 200,
+            notify: true
+          },
+          // handle i/o
+          input: { value: null },
 
-      Polymer('olos-matrix', {
-
-        started: false,
-        rootfolder: '../olos-matrix/',
-
-        // handle i/o
-        input: null,
-
-        // output data is an array
-        output: [],
-
-        breakpoints: [],
-
-
-        width: 200,
-        height: 200,
-
-        // nexusUI multi matrix
-        nexusEl: null,
-
-        publicMethods: ['setup', 'onStep'],
-
-        _upTick: false,
-
-        ready: function() {
+          /**
+           *  <a href="http://nexusosc.com/api/#nexusui-api-matrix" target="_blank"> Nexus UI matrix object</a>
+           *  @type {Object}
+           */
+          matrix: {
+            value: null,
+            type: Object
+          },
+          nexusEl: { value: null },
+          output: {
+            notify: true,
+            observer: 'outputChanged'
+          },
+          // output data is an array
+          outputData: {
+            type: Array,
+            value: function () {
+              return [];
+            }
+          },
+          play: { notify: true },
+          publicMethods: {
+            type: Array,
+            value: function () {
+              return [
+                'setup',
+                'onStep'
+              ];
+            }
+          },
+          rootfolder: {
+            type: String,
+            value: '../olos-matrix/',
+            notify: true
+          },
+          // properties to save as JSON
+          savesData: {
+            type: Array,
+            value: function () {
+              return ['this.matrixExp'];
+            },
+            notify: true
+          },
+          // offset scale (TO DO: figure out how to bring this back in? Or leave it up to subscribers?)
+          scaleOffset: {
+            type: Number,
+            value: 0
+          },
+          setup: {
+            value: function() {},
+            observer: 'setupChanged'
+          },
+          showControls: { notify: true },
+          src: { notify: true },
+          started: {
+            type: Boolean,
+            value: false
+          },
+          tickInterval: { observer: 'tickIntervalChanged' },
+          width: {
+            type: Number,
+            value: 200,
+            notify: true
+          }
+        },
+        ready: function () {
           var self = this;
-
           // nexus element
-          this.nexusEl = this.matrix = nx.add("matrixExp");
+          this.nexusEl = this.matrix = nx.add('matrixExp');
+          this.nexusEl.colors.accent = '#00FF7F';
+          // this.nexusEl.colors.fill = '#EBF6FF';
 
-          document.body.removeChild(this.nexusEl.canvas);
+          Polymer.dom(document.body).removeChild(this.nexusEl.canvas);
 
           // new
-          this.$.container.appendChild(this.nexusEl.canvas);
-
-          self.nexusEl.canvas.style.setProperty('width', "100%");
-          self.nexusEl.canvas.style.setProperty('height', "100%");
-
-          this.nexusEl.canvas.width = this.width;
-          this.nexusEl.canvas.height = this.height;
-
+          Polymer.dom(this.$.container).appendChild(this.nexusEl.canvas);
+          self.nexusEl.canvas.style.setProperty('width', '100%');
+          self.nexusEl.canvas.style.setProperty('height', '100%');
+          this.set('nexusEl.canvas.width', this.width);
+          this.set('nexusEl.canvas.height', this.height);
           this.$.container.style.setProperty('width', this.width);
           this.$.container.style.setProperty('height', this.height);
+          this.nexusEl.width = this.width;
+          this.nexusEl.height = this.height;
+          this.nexusEl.actualWid = this.width;
+          this.nexusEl.actualHgt = this.height;
 
+          this.setup = function () {
+            this.set('matrix.col', 8);
+            this.set('matrix.row', 5);
+            // set update frequency in Tone.Time, where '8n' is an eighth note
+            this.tickInterval = '8n';
+          };
 
           this.setup();
-
-          setTimeout(function() {
+          setTimeout(function () {
             self.resize();
             self.nexusEl.init();
-            self._init();
-          }, 20);
-
-          this.output = [0];
-
-        },
-
-        domReady: function() {
-        },
-
-        _init: function() {
-          var self = this;
-
-          this.nexusEl.on('*', function(val) {
-            if (typeof(val) !== 'undefined' && (val.list instanceof Array) ) {
-              // reverse the column so first array is lowest
-              var reversedColumn = val.list.slice();
-              reversedColumn = reversedColumn.reverse();
-              self.onStep(reversedColumn);
+          }, 40);
+          this.outputData = [0];
+          Object.defineProperty(self, 'output', {
+            'get': function () {
+              return self.outputData;
+            },
+            'set': function (val) {
+              return;
             }
-            // else {
-            //   throw 'error!!! ' + val + ' val is undefined in matrix';
-            // }
           });
 
+          this._extendNexusZoom(this.nexusEl);
         },
-
-        start: function() {
+        start: function () {
           var self = this;
-          // TO DO: replace this with link to global transport
-          // this.nexusEl.sequence(this.matrix.bpm);
           this.started = true;
         },
-
-        stop: function() {
+        stop: function () {
           this.nexusEl.stop();
           this.started = false;
         },
-
-        toggle: function() {
+        toggle: function () {
           if (this.started) {
             this.stop();
           } else {
             this.start();
           }
         },
-
         // these settings can be tweaked in the editor
-        setup: function() {
-          this.matrix.col = 4;
-          this.matrix.row = 4;
 
-          // set update frequency in Tone.Time, where '4n' is a quarter note
-          this.tickInterval = '4n';
-
-          // offset scale
-          this.scaleOffset = 0;
-        },
-
-        tickIntervalChanged: function() {
+        tickIntervalChanged: function () {
           var self = this;
-
           // schedule ticks to begin on the next beat
-          Tone.Transport.setTimeout(function() {
-
+          Tone.Transport.scheduleOnce(function () {
             if (self._tickCallback) {
-              Tone.Transport.clearInterval(self._tickCallback);
+              Tone.Transport.clear(self._tickCallback);
             }
-
             self.nexusEl.place = 0;
-
-            self._tickCallback = Tone.Transport.setInterval(function() {
-              // var place = Tone.Transport.transportTimeToSeconds(Tone.Transport.position);
-
-              self.nexusEl.jumpToCol( (self.nexusEl.place) % self.nexusEl.col);
+            self._tickCallback = Tone.Transport.scheduleRepeat(function (time) {
+              self._time = time;
+              self.nexusEl.jumpToCol(self.nexusEl.place % self.nexusEl.col);
               self.nexusEl.place++;
-            }, self.tickInterval)
-          }, Tone.Transport.nextBeat( self.tickInterval + "*" + String( self.nexusEl.col) ) );
+              var val = self.nexusEl.val;
+              if (typeof val !== 'undefined' && val.list instanceof Array) {
+                // reverse the column so first array is lowest
+                // var reversedColumn = val.list.slice();
+                // reversedColumn = reversedColumn.reverse();
+                self.onStep(val.list.slice());
+              }
+              // do all the audio callbacks
+              self._doCallbacks(time);
+            }, self.tickInterval);
+          // }, Tone.Transport.quantize(self.tickInterval + '*' + String(self.nexusEl.col)));
+          }, '@1m'); // quantize
         },
 
-        onStep: function(column) {
-          if (typeof(column) !== 'undefined') {
-            var output = new Array(column.length);
-            for (var i = 0; i < column.length; i++) {
-              if (column[i] > 0) {
-                output[i] = column[i];
-                // scale step to frequency based on the current scale
+        // every step, determine the output data
+        onStep: function (column) {
+          var column = arguments[0];
+          if (typeof column !== 'undefined') {
+            this.outputData = column;
 
-                // TO DO: move this to oscillator
-                // output[i] = olos.scaleStep(i + this.scaleOffset);
-              } else {
-                output[i] = 0;
-              }
-            }
-            this.output = output;
-            this.fire('output-ready', this.output);
+            // random
+            // var randomness = 0.1;
+            // for (var i=0; i<this.matrix.col; i++) {
+            //   this.matrix.matrixExp[i] = new Array(this.matrix.row)
+            //   for (var j=0; j<this.matrix.row; j++) {
+            //     this.matrix.matrixExp[i][j] = Math.random() < randomness ? 1 : 0 // set value of each matrix cell
+            //   }
+            // }
+            // this.matrix.draw();
           }
         },
+        /**
+         *  Trigger audio param / audio flow events
+         */
+        _doCallbacks: function (time) {
+          if (this.outputConnections) {
+            for (var i = 0; i < this.outputConnections.length; i++) {
+              var dstName = this.outputConnections[i].destinationLabel;
+              var dstNode = this.outputConnections[i].destination[dstName];
+              var val = this.outputData;
 
-        setupChanged: function() {
+              // send first value in array if it is audio param
+              // if (dstNode instanceof AudioParam || dstNode instanceof Tone.Signal) {
+              //   val = Number(this.outputData[0]);
+              // }
+              try {
+                dstNode.setValueAtTime(val, time);
+              } catch(e) {
+                console.log('Error with matrix connection to ', dstName);
+              }
+            }
+          }
+        },
+        setupChanged: function () {
+          console.log('setup changed');
           this.setup();
-
           var matExp = this.matrix.matrixExp;
-
           // resets matrix data
           this.matrix.init();
-
           // TO DO: fix this ***
           // map the original matrix data to the new matrix
           for (var i = 0; i < matExp.length; i++) {
             for (var j = 0; j < matExp[i].length; j++) {
-
               if (!this.matrix.matrixExp[i]) {
-                this.matrix.matrixExp[i] = new Array(this.matrix.matrixExp[i-1][j].length);
+                this.set('matrix.matrixExp' + ('.' + i), new Array(this.matrix.matrixExp[i - 1][j].length));
               }
-
               if (this.matrix.matrixExp[i]) {
                 // if (j < this.matrix.matrixExp.length) {
-                  this.matrix.matrixExp[i][j] = matExp[i][j];
-                // }
+                this.set('matrix.matrixExp' + ('.' + i) + ('.' + j), matExp[i][j]);
               }
             }
           }
-
+          // }
           this.matrix.draw();
+        },
+        outputChanged: function () {
+        },
+        disconnect: function (eltID) {
+          console.log(eltID);
+          if (eltID) {
+            var goodConnections = this.outputConnections.filter(function (conn, index) {
+              //filter if element is source or target of a connection
+              return (conn.destination.id !== eltID);
+            });
+
+            this.outputConnections = goodConnections;
+          } else {
+            this.outputConnections = [];
+          }
 
         },
+        resize: function () {
+          this.nexusEl.width = this.$.container.offsetWidth;
+          this.nexusEl.height = this.$.container.offsetHeight;
+          this.nexusEl.canvas.width= this.$.container.offsetWidth;
+          this.nexusEl.canvas.height = this.$.container.offsetHeight;
+          this.nexusEl.canvas.style.setProperty('width', this.$.container.offsetWidth);
+          this.nexusEl.canvas.style.setProperty('height', this.$.container.offsetHeight);
+          this.nexusEl.actualWid = this.$.container.offsetWidth;
+          this.nexusEl.actualHgt = this.$.container.offsetHeight;
+          this.nexusEl.draw();
+        },
+        _extendNexusZoom: function(elt) {
+          if (typeof olos == 'undefined') return;
 
-        outputChanged: function() {
-          if (this.outputConnections) {
-            for (var i = 0; i < this.outputConnections.length; i++) {
-              // yes
-              var inputName = this.outputConnections[i].destinationLabel;
-              // console.log(this.outputConnections[i].destination[inputName]);
-              this.outputConnections[i].destination[inputName] = this.output;
+          elt.click = function(e) {
 
-              // temporary fix
-              this.outputConnections[i].destination.update();
+            this.cur = {
+              col: ~~(this.clickPos.x/this.cellWid * 1/olos._zoom),
+              row: ~~(this.clickPos.y/this.cellHgt * 1/olos._zoom)
+            }
+
+            if (this.matrixExp[this.cur.col][this.cur.row]) {
+              this.matrixExp[this.cur.col][this.cur.row] = 0;
+              this.erasing = true;
+            } else {
+              this.matrixExp[this.cur.col][this.cur.row] = 1;
+              this.erasing = false;
+            }
+
+            this.cur.value = this.matrixExp[this.cur.col][this.cur.row]
+            this.prev = this.cur;
+
+            this.val = {
+              row: this.cur.row,
+              col: this.cur.col,
+              level: this.cur.value
+            }
+
+            this.transmit(this.val);
+            this.draw();
+          };
+
+          elt.move = function(e) {
+            if (this.clicked) {
+              
+              this.cur = {
+                col: ~~(this.clickPos.x/this.cellWid * 1/olos._zoom),
+                row: ~~(this.clickPos.y/this.cellHgt * 1/olos._zoom)
+              }
+
+              if (this.cur.row < this.row && this.cur.col < this.col && this.cur.row >= 0 && this.cur.col >=0) {
+                if (this.cur.col!=this.prev.col || this.cur.row != this.prev.row) {
+                  if (this.erasing) {
+                    this.matrixExp[this.cur.col][this.cur.row] = 0;
+                  } else {
+                    this.matrixExp[this.cur.col][this.cur.row] = 1;
+                  }
+
+                  this.cur.value = this.matrixExp[this.cur.col][this.cur.row]
+                  this.prev = this.cur;
+
+                  this.val = {
+                    row: this.cur.row,
+                    col: this.cur.col,
+                    level: this.cur.value
+                  }
+
+                  this.transmit(this.val);
+                  this.draw();
+                }
+              }
             }
           }
         },
-
-
-        resize: function() {
-          this.nexusEl.width = this.$.container.offsetWidth;
-          this.nexusEl.height = this.$.container.offsetHeight;
-
-          this.nexusEl.canvas.width = this.$.container.offsetWidth;
-          this.nexusEl.canvas.height = this.$.container.offsetHeight;
-
-          this.nexusEl.canvas.style.setProperty('width', this.$.container.offsetWidth);
-          this.nexusEl.canvas.style.setProperty('height', this.$.container.offsetHeight);
-
-          this.nexusEl.actualWid = this.$.container.offsetWidth;
-          this.nexusEl.actualHgt = this.$.container.offsetHeight;
-
-          this.nexusEl.draw();
-        },
-
-        dispose: function() {
+        dispose: function () {
           var self = this;
-
+          // clear callbacks
+          if (self._tickCallback) {
+            Tone.Transport.clear(self._tickCallback);
+          }
           // erase nexus element
           self.nexusEl.destroy();
-        },
-
+        }
       });
-
-    })();
-</script>
-
-
-  <script src="../nexusUI/dist/nexusUI.js"type="text/javascript"></script>
-
-</polymer-element>
+    }());
+  </script>
+</dom-module>
